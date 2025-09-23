@@ -1,0 +1,1 @@
+rsync -avP aashraf@login.talapas.uoregon.edu:~/ML-dir/u-net_picker/ /Users/asifashraf/Documents/code_repo/adapt_U-net_picker/

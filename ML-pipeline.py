@@ -9,6 +9,7 @@ import pickle
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 import os
+import sys
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # 🏗️ PHYSICS-INFORMED FEATURE EXTRACTION
@@ -413,6 +414,84 @@ class AdaptiveUNet1D(nn.Module):
         return F.softmax(output, dim=1)
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
+# 🏗️ PICK STATISTICS AND VALIDATION
+# ═══════════════════════════════════════════════════════════════════════════════════════
+
+def analyze_pick_statistics(db_path):
+    """Analyze and display statistics about available picks in the database"""
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    print("\n" + "="*80)
+    print("📊 PICK AVAILABILITY ANALYSIS")
+    print("="*80)
+
+    # Total waveforms
+    cursor.execute("SELECT COUNT(*) FROM waveforms")
+    total_waveforms = cursor.fetchone()[0]
+
+    # PhaseNet picks
+    cursor.execute("SELECT COUNT(*) FROM waveforms WHERE p_pick_time IS NOT NULL")
+    phasenet_picks = cursor.fetchone()[0]
+
+    # Manual picks
+    cursor.execute("SELECT COUNT(*) FROM waveforms WHERE manual_p_pick_time IS NOT NULL")
+    manual_picks = cursor.fetchone()[0]
+
+    # Both picks available
+    cursor.execute("""
+        SELECT COUNT(*) FROM waveforms
+        WHERE p_pick_time IS NOT NULL AND manual_p_pick_time IS NOT NULL
+    """)
+    both_picks = cursor.fetchone()[0]
+
+    # No picks available
+    cursor.execute("""
+        SELECT COUNT(*) FROM waveforms
+        WHERE p_pick_time IS NULL AND manual_p_pick_time IS NULL
+    """)
+    no_picks = cursor.fetchone()[0]
+
+    conn.close()
+
+    print(f"Total waveforms in database: {total_waveforms}")
+    print(f"\nPick availability breakdown:")
+    print(f"  PhaseNet picks available:   {phasenet_picks:4d} ({phasenet_picks/total_waveforms*100:.1f}%)")
+    print(f"  Manual picks available:     {manual_picks:4d} ({manual_picks/total_waveforms*100:.1f}%)")
+    print(f"  Both picks available:       {both_picks:4d} ({both_picks/total_waveforms*100:.1f}%)")
+    print(f"  No picks available:         {no_picks:4d} ({no_picks/total_waveforms*100:.1f}%)")
+
+    return {
+        'total': total_waveforms,
+        'phasenet': phasenet_picks,
+        'manual': manual_picks,
+        'both': both_picks,
+        'none': no_picks
+    }
+
+def get_pick_type_choice():
+    """Get user's choice for pick type"""
+    print("\n" + "="*80)
+    print("🎯 PICK TYPE SELECTION")
+    print("="*80)
+    print("Choose which picks to use for training:")
+    print("  1. PhaseNet picks (automatic)")
+    print("  2. Manual picks (human-reviewed)")
+
+    while True:
+        try:
+            choice = input("\nEnter your choice (1 or 2): ").strip()
+            if choice == '1':
+                return 'phasenet'
+            elif choice == '2':
+                return 'manual'
+            else:
+                print("Please enter 1 or 2")
+        except KeyboardInterrupt:
+            print("\nExiting...")
+            sys.exit(0)
+
+# ═══════════════════════════════════════════════════════════════════════════════════════
 # 🏗️ DATASET LOADING FROM DATABASE
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
@@ -427,15 +506,16 @@ class SeismicDatabaseDataset(Dataset):
     └──────────────────────────────────────────────────────────────────────────────────────┘
     """
     
-    def __init__(self, db_path='seismic_data.db', window_size=5, target_length=12300, 
+    def __init__(self, db_path='seismic_data.db', window_size=5, target_length=12300,
                  use_physics_features=True, use_max_amplitude=True, window_length=None,
-                 train=True, train_split=0.8, random_seed=42):
+                 train=True, train_split=0.8, random_seed=42, pick_type='phasenet'):
         self.db_path = db_path
         self.window_size = window_size
         self.target_length = target_length
         self.use_physics_features = use_physics_features
         self.use_max_amplitude = use_max_amplitude
         self.window_length = window_length
+        self.pick_type = pick_type  # 'phasenet' or 'manual'
 
         # Initialize physics feature extractor if needed
         if self.use_physics_features:
@@ -463,13 +543,23 @@ class SeismicDatabaseDataset(Dataset):
         tables = cursor.fetchall()
         print(f"Available tables in database: {[t[0] for t in tables]}")
         
-        # Get all waveforms
-        cursor.execute("""
-            SELECT id, earthquake_id, station_code, waveform_data, 
-                   sampling_rate, p_pick_time, eq_time, pre_time, post_time
-            FROM waveforms
-            ORDER BY earthquake_id, station_code
-        """)
+        # Get all waveforms with the selected pick type
+        if self.pick_type == 'manual':
+            cursor.execute("""
+                SELECT id, earthquake_id, station_code, waveform_data,
+                       sampling_rate, manual_p_pick_time, eq_time, pre_time, post_time
+                FROM waveforms
+                WHERE manual_p_pick_time IS NOT NULL
+                ORDER BY earthquake_id, station_code
+            """)
+        else:  # phasenet
+            cursor.execute("""
+                SELECT id, earthquake_id, station_code, waveform_data,
+                       sampling_rate, p_pick_time, eq_time, pre_time, post_time
+                FROM waveforms
+                WHERE p_pick_time IS NOT NULL
+                ORDER BY earthquake_id, station_code
+            """)
         
         all_records = cursor.fetchall()
         conn.close()
@@ -491,7 +581,8 @@ class SeismicDatabaseDataset(Dataset):
         else:
             records = all_records[split_idx:]
         
-        print(f"Loading {'training' if train else 'validation'} set: {len(records)} waveforms")
+        pick_type_name = "Manual" if self.pick_type == 'manual' else "PhaseNet"
+        print(f"Loading {'training' if train else 'validation'} set: {len(records)} waveforms ({pick_type_name} picks)")
         
         # Process waveforms
         self.data = []
@@ -949,8 +1040,8 @@ def plot_model_predictions(model, dataset, num_examples=1, save_path='prediction
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
 def main(use_physics_features=True, use_max_amplitude=True, window_length=None,
-         num_epochs=25, 
-         db_path='seismic_data.db', batch_size=4, use_median_filter=True):
+         num_epochs=25,
+         db_path='seismic_data.db', batch_size=4, use_median_filter=True, pick_type=None):
     """
     Main execution function for ML pipeline
     
@@ -980,6 +1071,28 @@ def main(use_physics_features=True, use_max_amplitude=True, window_length=None,
         print(f"❌ Database not found at {db_path}")
         print("Please run data_mine.py first to create the database.")
         return
+
+    # Analyze pick statistics and get user choice
+    pick_stats = analyze_pick_statistics(db_path)
+
+    # Get pick type choice if not provided
+    if pick_type is None:
+        pick_type = get_pick_type_choice()
+
+    # Validate pick type availability
+    if pick_type == 'manual' and pick_stats['manual'] == 0:
+        print(f"\n❌ No manual picks found in database!")
+        print("Please use the picker.py tool to create manual picks first,")
+        print("or choose PhaseNet picks instead.")
+        return
+    elif pick_type == 'phasenet' and pick_stats['phasenet'] == 0:
+        print(f"\n❌ No PhaseNet picks found in database!")
+        print("Please ensure the database contains PhaseNet picks.")
+        return
+
+    print(f"\n✅ Using {pick_type.upper()} picks for training")
+    available_picks = pick_stats['manual'] if pick_type == 'manual' else pick_stats['phasenet']
+    print(f"   Available waveforms with {pick_type} picks: {available_picks}")
     
     # Create datasets
     print('\n')
@@ -994,7 +1107,8 @@ def main(use_physics_features=True, use_max_amplitude=True, window_length=None,
         use_physics_features=use_physics_features,
         use_max_amplitude=use_max_amplitude,
         window_length=window_length,
-        train=True
+        train=True,
+        pick_type=pick_type
     )
 
     print("Creating validation dataset...")
@@ -1004,7 +1118,8 @@ def main(use_physics_features=True, use_max_amplitude=True, window_length=None,
         use_physics_features=use_physics_features,
         use_max_amplitude=use_max_amplitude,
         window_length=window_length,
-        train=False
+        train=False,
+        pick_type=pick_type
     )
 
     print(f"✅ Training dataset size: {len(train_dataset)}")
@@ -1082,8 +1197,9 @@ def main(use_physics_features=True, use_max_amplitude=True, window_length=None,
     sampling_rate = 100
     pick_errors_seconds = pick_errors / sampling_rate
     
-    print(f"\n🎯 PICK ACCURACY RESULTS - {feature_mode.upper()} MODE")
-    print("=" * 60)
+    pick_type_display = pick_type.upper()
+    print(f"\n🎯 PICK ACCURACY RESULTS - {feature_mode.upper()} MODE ({pick_type_display} PICKS)")
+    print("=" * 70)
     print(f"Mean absolute error: {np.mean(pick_errors_seconds):.4f} ± {np.std(pick_errors_seconds):.4f} seconds")
     print(f"Median absolute error: {np.median(pick_errors_seconds):.4f} seconds")
     print(f"90th percentile error: {np.percentile(pick_errors_seconds, 90):.4f} seconds")
@@ -1152,11 +1268,11 @@ def main(use_physics_features=True, use_max_amplitude=True, window_length=None,
             print(f"  {name:15s}: {weight:.4f}")
     
     # Save model
-    model_name = f'{"physics_informed" if use_physics_features else "raw_waveform"}_phase_picker.pth'
+    model_name = f'{"physics_informed" if use_physics_features else "raw_waveform"}_{pick_type}_phase_picker.pth'
     torch.save(model.state_dict(), model_name)
     print(f"\n💾 Model saved as '{model_name}'")
-    
-    print(f"\n🎉 TRAINING COMPLETE - {feature_mode.upper()} MODE!")
+
+    print(f"\n🎉 TRAINING COMPLETE - {feature_mode.upper()} MODE ({pick_type_display} PICKS)!")
     print("=" * 80)
 
 if __name__ == "__main__":
@@ -1165,21 +1281,25 @@ if __name__ == "__main__":
     # ═══════════════════════════════════════════════════════════════════════════════════════
     
     # Toggle physics-informed features ON/OFF
-    USE_PHYSICS_FEATURES = False   # Set to False for raw waveform only
+    USE_PHYSICS_FEATURES = True   # Set to False for raw waveform only
 
     # Toggle max amplitude feature ON/OFF
-    USE_MAX_AMPLITUDE = False  # Set to False to disable max amplitude feature
-    window_length = np.array([100, 200, 500])  # Window lengths for max amplitude feature
+    USE_MAX_AMPLITUDE = True  # Set to False to disable max amplitude feature
+    window_length = np.array([100])  # Window lengths for max amplitude feature
 
     # Set number of training epochs
-    TRAINING_EPOCHS = 200
+    TRAINING_EPOCHS = 100
     
     # Database path
-    DATABASE_PATH = 'seismic_data_2.db'
+    DATABASE_PATH = 'seismic_data_new.db'
     
     # Batch size
     BATCH_SIZE = 4
-    
+
+    # Pick type (optional - will prompt user if not specified)
+    # PICK_TYPE = 'phasenet'  # or 'manual' - leave as None for interactive choice
+    PICK_TYPE = None
+
     # Run the main function with your configuration
     main(
         use_physics_features=USE_PHYSICS_FEATURES,
@@ -1187,5 +1307,6 @@ if __name__ == "__main__":
         window_length=window_length,
         num_epochs=TRAINING_EPOCHS,
         db_path=DATABASE_PATH,
-        batch_size=BATCH_SIZE
+        batch_size=BATCH_SIZE,
+        pick_type=PICK_TYPE
     )

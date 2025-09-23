@@ -1,0 +1,1 @@
+rsync -avP --exclude 'predictions' /Users/asifashraf/Documents/code_repo/adapt_U-net_picker/ aashraf@login.talapas.uoregon.edu:~/ML-dir/u-net_picker/
