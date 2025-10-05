@@ -3,8 +3,22 @@ PHYSICS-INFORMED SEISMIC PHASE PICKER - ML PIPELINE
 ================================================================================
 🔧 Configuration: Physics-Informed mode
 🔧 Max Amplitude: Enabled
-🕐 Training epochs: 100
-📊 Database: seismic_data_new.db
+🕐 Training epochs: 200
+📊 Database: seismic_data_s3.db
+
+================================================================================
+📊 PICK AVAILABILITY ANALYSIS
+================================================================================
+Total waveforms in database: 1195
+
+Pick availability breakdown:
+  PhaseNet picks available:   1195 (100.0%)
+  Manual picks available:     1178 (98.6%)
+  Both picks available:       1178 (98.6%)
+  No picks available:            0 (0.0%)
+
+✅ Using MANUAL picks for training
+   Available waveforms with manual picks: 1178
 
 
 --------------------------------------------------
@@ -12,14 +26,14 @@ LOADING DATA FROM DATABASE - PHYSICS-INFORMED MODE
 --------------------------------------------------
 Creating training dataset...
 Available tables in database: ['earthquakes', 'sqlite_sequence', 'waveforms']
-Loading training set: 2134 waveforms
-Successfully processed 2134 waveforms
+Loading training set: 942 waveforms (Manual picks)
+Successfully processed 942 waveforms
 Creating validation dataset...
 Available tables in database: ['earthquakes', 'sqlite_sequence', 'waveforms']
-Loading validation set: 534 waveforms
-Successfully processed 534 waveforms
-✅ Training dataset size: 2134
-✅ Validation dataset size: 534
+Loading validation set: 236 waveforms (Manual picks)
+Successfully processed 236 waveforms
+✅ Training dataset size: 942
+✅ Validation dataset size: 236
 
 📊 VISUALIZING PHYSICS-INFORMED FEATURES
 --------------------------------------------------
@@ -29,156 +43,148 @@ Visualizing and saving waveform features...
 --------------------------------------------------
 INITIALIZING PHYSICS-INFORMED MODEL
 --------------------------------------------------
-✅ Input channels (features): 17
-✅ Feature shape: torch.Size([17, 12300])
-Total parameters: 2,833,364
-Trainable parameters: 2,833,364
+✅ Input channels (features): 19
+✅ Feature shape: torch.Size([19, 12300])
+Total parameters: 2,833,558
+Trainable parameters: 2,833,558
 
 
 --------------------------------------------------
 🚀 STARTING TRAINING
 --------------------------------------------------
-Epoch 1/100, Train Loss: 0.3821, Val Loss: 0.3473, LR: 0.001000
-Epoch 2/100, Train Loss: 0.3388, Val Loss: 0.3345, LR: 0.001000
-Epoch 3/100, Train Loss: 0.3372, Val Loss: 0.3385, LR: 0.001000
-Epoch 4/100, Train Loss: 0.3350, Val Loss: 0.3358, LR: 0.001000
-Epoch 5/100, Train Loss: 0.3333, Val Loss: 0.3352, LR: 0.001000
-Epoch 6/100, Train Loss: 0.3344, Val Loss: 0.3366, LR: 0.001000
-Epoch 7/100, Train Loss: 0.3343, Val Loss: 0.3327, LR: 0.001000
-Epoch 8/100, Train Loss: 0.3345, Val Loss: 0.3314, LR: 0.001000
-Epoch 9/100, Train Loss: 0.3339, Val Loss: 0.3377, LR: 0.001000
-Epoch 10/100, Train Loss: 0.3330, Val Loss: 0.3312, LR: 0.001000
-Epoch 11/100, Train Loss: 0.3310, Val Loss: 0.3297, LR: 0.001000
-Epoch 12/100, Train Loss: 0.3317, Val Loss: 0.3306, LR: 0.001000
-Epoch 13/100, Train Loss: 0.3298, Val Loss: 0.3292, LR: 0.001000
-Epoch 14/100, Train Loss: 0.3300, Val Loss: 0.3300, LR: 0.001000
-Epoch 15/100, Train Loss: 0.3291, Val Loss: 0.3289, LR: 0.001000
-Epoch 16/100, Train Loss: 0.3297, Val Loss: 0.3309, LR: 0.001000
-Epoch 17/100, Train Loss: 0.3337, Val Loss: 0.3353, LR: 0.001000
-Epoch 18/100, Train Loss: 0.3332, Val Loss: 0.3331, LR: 0.001000
-Epoch 19/100, Train Loss: 0.3318, Val Loss: 0.3321, LR: 0.001000
-Epoch 20/100, Train Loss: 0.3309, Val Loss: 0.3305, LR: 0.001000
-Epoch 21/100, Train Loss: 0.3303, Val Loss: 0.3304, LR: 0.000500
-Epoch 22/100, Train Loss: 0.3295, Val Loss: 0.3292, LR: 0.000500
-Epoch 23/100, Train Loss: 0.3289, Val Loss: 0.3290, LR: 0.000500
-Epoch 24/100, Train Loss: 0.3283, Val Loss: 0.3282, LR: 0.000500
-Epoch 25/100, Train Loss: 0.3282, Val Loss: 0.3277, LR: 0.000500
-Epoch 26/100, Train Loss: 0.3280, Val Loss: 0.3280, LR: 0.000500
-Epoch 27/100, Train Loss: 0.3278, Val Loss: 0.3280, LR: 0.000500
-Epoch 28/100, Train Loss: 0.3274, Val Loss: 0.3275, LR: 0.000500
-Epoch 29/100, Train Loss: 0.3273, Val Loss: 0.3273, LR: 0.000500
-Epoch 30/100, Train Loss: 0.3271, Val Loss: 0.3272, LR: 0.000500
-Epoch 31/100, Train Loss: 0.3270, Val Loss: 0.3274, LR: 0.000500
-Epoch 32/100, Train Loss: 0.3268, Val Loss: 0.3270, LR: 0.000500
-Epoch 33/100, Train Loss: 0.3266, Val Loss: 0.3260, LR: 0.000500
-Epoch 34/100, Train Loss: 0.3264, Val Loss: 0.3261, LR: 0.000500
-Epoch 35/100, Train Loss: 0.3262, Val Loss: 0.3262, LR: 0.000500
-Epoch 36/100, Train Loss: 0.3260, Val Loss: 0.3259, LR: 0.000500
-Epoch 37/100, Train Loss: 0.3258, Val Loss: 0.3262, LR: 0.000500
-Epoch 38/100, Train Loss: 0.3257, Val Loss: 0.3259, LR: 0.000500
-Epoch 39/100, Train Loss: 0.3254, Val Loss: 0.3257, LR: 0.000500
-Epoch 40/100, Train Loss: 0.3252, Val Loss: 0.3254, LR: 0.000500
-Epoch 41/100, Train Loss: 0.3250, Val Loss: 0.3260, LR: 0.000500
-Epoch 42/100, Train Loss: 0.3250, Val Loss: 0.3251, LR: 0.000500
-Epoch 43/100, Train Loss: 0.3247, Val Loss: 0.3248, LR: 0.000500
-Epoch 44/100, Train Loss: 0.3247, Val Loss: 0.3245, LR: 0.000500
-Epoch 45/100, Train Loss: 0.3247, Val Loss: 0.3247, LR: 0.000500
-Epoch 46/100, Train Loss: 0.3244, Val Loss: 0.3243, LR: 0.000500
-Epoch 47/100, Train Loss: 0.3246, Val Loss: 0.3247, LR: 0.000500
-Epoch 48/100, Train Loss: 0.3244, Val Loss: 0.3244, LR: 0.000500
-Epoch 49/100, Train Loss: 0.3243, Val Loss: 0.3244, LR: 0.000500
-Epoch 50/100, Train Loss: 0.3242, Val Loss: 0.3242, LR: 0.000500
-Epoch 51/100, Train Loss: 0.3242, Val Loss: 0.3241, LR: 0.000500
-Epoch 52/100, Train Loss: 0.3242, Val Loss: 0.3251, LR: 0.000500
-Epoch 53/100, Train Loss: 0.3242, Val Loss: 0.3241, LR: 0.000500
-Epoch 54/100, Train Loss: 0.3241, Val Loss: 0.3251, LR: 0.000500
-Epoch 55/100, Train Loss: 0.3238, Val Loss: 0.3239, LR: 0.000500
-Epoch 56/100, Train Loss: 0.3240, Val Loss: 0.3243, LR: 0.000500
-Epoch 57/100, Train Loss: 0.3239, Val Loss: 0.3242, LR: 0.000500
-Epoch 58/100, Train Loss: 0.3238, Val Loss: 0.3237, LR: 0.000500
-Epoch 59/100, Train Loss: 0.3239, Val Loss: 0.3237, LR: 0.000500
-Epoch 60/100, Train Loss: 0.3237, Val Loss: 0.3235, LR: 0.000500
-Epoch 61/100, Train Loss: 0.3236, Val Loss: 0.3244, LR: 0.000500
-Epoch 62/100, Train Loss: 0.3236, Val Loss: 0.3246, LR: 0.000500
-Epoch 63/100, Train Loss: 0.3238, Val Loss: 0.3241, LR: 0.000500
-Epoch 64/100, Train Loss: 0.3236, Val Loss: 0.3234, LR: 0.000500
-Epoch 65/100, Train Loss: 0.3234, Val Loss: 0.3237, LR: 0.000500
-Epoch 66/100, Train Loss: 0.3234, Val Loss: 0.3236, LR: 0.000500
-Epoch 67/100, Train Loss: 0.3233, Val Loss: 0.3235, LR: 0.000500
-Epoch 68/100, Train Loss: 0.3234, Val Loss: 0.3240, LR: 0.000500
-Epoch 69/100, Train Loss: 0.3235, Val Loss: 0.3234, LR: 0.000500
-Epoch 70/100, Train Loss: 0.3234, Val Loss: 0.3233, LR: 0.000500
-Epoch 71/100, Train Loss: 0.3232, Val Loss: 0.3234, LR: 0.000500
-Epoch 72/100, Train Loss: 0.3233, Val Loss: 0.3230, LR: 0.000500
-Epoch 73/100, Train Loss: 0.3232, Val Loss: 0.3231, LR: 0.000500
-Epoch 74/100, Train Loss: 0.3232, Val Loss: 0.3234, LR: 0.000500
-Epoch 75/100, Train Loss: 0.3232, Val Loss: 0.3238, LR: 0.000500
-Epoch 76/100, Train Loss: 0.3231, Val Loss: 0.3231, LR: 0.000500
-Epoch 77/100, Train Loss: 0.3231, Val Loss: 0.3234, LR: 0.000500
-Epoch 78/100, Train Loss: 0.3231, Val Loss: 0.3236, LR: 0.000250
-Epoch 79/100, Train Loss: 0.3226, Val Loss: 0.3227, LR: 0.000250
-Epoch 80/100, Train Loss: 0.3225, Val Loss: 0.3227, LR: 0.000250
-Epoch 81/100, Train Loss: 0.3226, Val Loss: 0.3228, LR: 0.000250
-Epoch 82/100, Train Loss: 0.3226, Val Loss: 0.3227, LR: 0.000250
-Epoch 83/100, Train Loss: 0.3227, Val Loss: 0.3227, LR: 0.000250
-Epoch 84/100, Train Loss: 0.3225, Val Loss: 0.3224, LR: 0.000250
-Epoch 85/100, Train Loss: 0.3225, Val Loss: 0.3226, LR: 0.000250
-Epoch 86/100, Train Loss: 0.3225, Val Loss: 0.3226, LR: 0.000250
-Epoch 87/100, Train Loss: 0.3225, Val Loss: 0.3226, LR: 0.000250
-Epoch 88/100, Train Loss: 0.3224, Val Loss: 0.3224, LR: 0.000250
-Epoch 89/100, Train Loss: 0.3224, Val Loss: 0.3223, LR: 0.000250
-Epoch 90/100, Train Loss: 0.3224, Val Loss: 0.3224, LR: 0.000250
-Epoch 91/100, Train Loss: 0.3224, Val Loss: 0.3225, LR: 0.000250
-Epoch 92/100, Train Loss: 0.3223, Val Loss: 0.3223, LR: 0.000250
-Epoch 93/100, Train Loss: 0.3223, Val Loss: 0.3223, LR: 0.000250
-Epoch 94/100, Train Loss: 0.3223, Val Loss: 0.3222, LR: 0.000250
-Epoch 95/100, Train Loss: 0.3224, Val Loss: 0.3223, LR: 0.000250
-Epoch 96/100, Train Loss: 0.3221, Val Loss: 0.3221, LR: 0.000250
-Epoch 97/100, Train Loss: 0.3222, Val Loss: 0.3223, LR: 0.000250
-Epoch 98/100, Train Loss: 0.3223, Val Loss: 0.3226, LR: 0.000250
-Epoch 99/100, Train Loss: 0.3223, Val Loss: 0.3224, LR: 0.000250
-Epoch 100/100, Train Loss: 0.3222, Val Loss: 0.3222, LR: 0.000250
+Epoch 1/200, Train Loss: 0.4173, Val Loss: 0.3519, LR: 0.001000
+Epoch 2/200, Train Loss: 0.3446, Val Loss: 0.3391, LR: 0.001000
+Epoch 3/200, Train Loss: 0.3367, Val Loss: 0.3359, LR: 0.001000
+Epoch 4/200, Train Loss: 0.3348, Val Loss: 0.3350, LR: 0.001000
+Epoch 5/200, Train Loss: 0.3338, Val Loss: 0.3332, LR: 0.001000
+Epoch 6/200, Train Loss: 0.3328, Val Loss: 0.3319, LR: 0.001000
+Epoch 7/200, Train Loss: 0.3322, Val Loss: 0.3315, LR: 0.001000
+Epoch 8/200, Train Loss: 0.3306, Val Loss: 0.3323, LR: 0.001000
+Epoch 9/200, Train Loss: 0.3302, Val Loss: 0.3295, LR: 0.001000
+Epoch 10/200, Train Loss: 0.3284, Val Loss: 0.3280, LR: 0.001000
+Epoch 11/200, Train Loss: 0.3270, Val Loss: 0.3285, LR: 0.001000
+Epoch 12/200, Train Loss: 0.3264, Val Loss: 0.3270, LR: 0.001000
+Epoch 13/200, Train Loss: 0.3263, Val Loss: 0.3268, LR: 0.001000
+Epoch 14/200, Train Loss: 0.3260, Val Loss: 0.3256, LR: 0.001000
+Epoch 15/200, Train Loss: 0.3248, Val Loss: 0.3260, LR: 0.001000
+Epoch 16/200, Train Loss: 0.3242, Val Loss: 0.3247, LR: 0.001000
+Epoch 17/200, Train Loss: 0.3241, Val Loss: 0.3245, LR: 0.001000
+Epoch 18/200, Train Loss: 0.3240, Val Loss: 0.3239, LR: 0.001000
+Epoch 19/200, Train Loss: 0.3234, Val Loss: 0.3239, LR: 0.001000
+Epoch 20/200, Train Loss: 0.3232, Val Loss: 0.3241, LR: 0.001000
+Epoch 21/200, Train Loss: 0.3235, Val Loss: 0.3240, LR: 0.001000
+Epoch 22/200, Train Loss: 0.3230, Val Loss: 0.3232, LR: 0.001000
+Epoch 23/200, Train Loss: 0.3226, Val Loss: 0.3238, LR: 0.001000
+Epoch 24/200, Train Loss: 0.3228, Val Loss: 0.3232, LR: 0.001000
+Epoch 25/200, Train Loss: 0.3224, Val Loss: 0.3240, LR: 0.001000
+Epoch 26/200, Train Loss: 0.3224, Val Loss: 0.3233, LR: 0.001000
+Epoch 27/200, Train Loss: 0.3222, Val Loss: 0.3237, LR: 0.001000
+Epoch 28/200, Train Loss: 0.3225, Val Loss: 0.3224, LR: 0.001000
+Epoch 29/200, Train Loss: 0.3222, Val Loss: 0.3237, LR: 0.001000
+Epoch 30/200, Train Loss: 0.3220, Val Loss: 0.3233, LR: 0.001000
+Epoch 31/200, Train Loss: 0.3217, Val Loss: 0.3226, LR: 0.001000
+Epoch 32/200, Train Loss: 0.3218, Val Loss: 0.3227, LR: 0.001000
+Epoch 33/200, Train Loss: 0.3215, Val Loss: 0.3220, LR: 0.001000
+Epoch 34/200, Train Loss: 0.3217, Val Loss: 0.3224, LR: 0.001000
+Epoch 35/200, Train Loss: 0.3216, Val Loss: 0.3224, LR: 0.001000
+Epoch 36/200, Train Loss: 0.3212, Val Loss: 0.3220, LR: 0.001000
+Epoch 37/200, Train Loss: 0.3213, Val Loss: 0.3227, LR: 0.001000
+Epoch 38/200, Train Loss: 0.3215, Val Loss: 0.3218, LR: 0.001000
+Epoch 39/200, Train Loss: 0.3212, Val Loss: 0.3224, LR: 0.001000
+Epoch 40/200, Train Loss: 0.3213, Val Loss: 0.3223, LR: 0.001000
+Epoch 41/200, Train Loss: 0.3207, Val Loss: 0.3216, LR: 0.001000
+Epoch 42/200, Train Loss: 0.3213, Val Loss: 0.3223, LR: 0.001000
+Epoch 43/200, Train Loss: 0.3210, Val Loss: 0.3219, LR: 0.001000
+Epoch 44/200, Train Loss: 0.3214, Val Loss: 0.3221, LR: 0.001000
+Epoch 45/200, Train Loss: 0.3209, Val Loss: 0.3218, LR: 0.001000
+Epoch 46/200, Train Loss: 0.3210, Val Loss: 0.3223, LR: 0.001000
+Epoch 47/200, Train Loss: 0.3209, Val Loss: 0.3221, LR: 0.000500
+Epoch 48/200, Train Loss: 0.3205, Val Loss: 0.3213, LR: 0.000500
+Epoch 49/200, Train Loss: 0.3200, Val Loss: 0.3213, LR: 0.000500
+Epoch 50/200, Train Loss: 0.3200, Val Loss: 0.3210, LR: 0.000500
+Epoch 51/200, Train Loss: 0.3200, Val Loss: 0.3210, LR: 0.000500
+Epoch 52/200, Train Loss: 0.3200, Val Loss: 0.3214, LR: 0.000500
+Epoch 53/200, Train Loss: 0.3201, Val Loss: 0.3211, LR: 0.000500
+Epoch 54/200, Train Loss: 0.3199, Val Loss: 0.3212, LR: 0.000500
+Epoch 55/200, Train Loss: 0.3198, Val Loss: 0.3214, LR: 0.000500
+Epoch 56/200, Train Loss: 0.3198, Val Loss: 0.3211, LR: 0.000500
+Epoch 57/200, Train Loss: 0.3198, Val Loss: 0.3214, LR: 0.000250
+Epoch 58/200, Train Loss: 0.3193, Val Loss: 0.3212, LR: 0.000250
+Epoch 59/200, Train Loss: 0.3193, Val Loss: 0.3209, LR: 0.000250
+Epoch 60/200, Train Loss: 0.3193, Val Loss: 0.3212, LR: 0.000250
+Epoch 61/200, Train Loss: 0.3193, Val Loss: 0.3210, LR: 0.000250
+Epoch 62/200, Train Loss: 0.3190, Val Loss: 0.3210, LR: 0.000250
+Epoch 63/200, Train Loss: 0.3192, Val Loss: 0.3210, LR: 0.000250
+Epoch 64/200, Train Loss: 0.3192, Val Loss: 0.3209, LR: 0.000250
+Epoch 65/200, Train Loss: 0.3192, Val Loss: 0.3210, LR: 0.000125
+Epoch 66/200, Train Loss: 0.3189, Val Loss: 0.3209, LR: 0.000125
+Epoch 67/200, Train Loss: 0.3189, Val Loss: 0.3207, LR: 0.000125
+Epoch 68/200, Train Loss: 0.3189, Val Loss: 0.3210, LR: 0.000125
+Epoch 69/200, Train Loss: 0.3188, Val Loss: 0.3209, LR: 0.000125
+Epoch 70/200, Train Loss: 0.3188, Val Loss: 0.3212, LR: 0.000125
+Epoch 71/200, Train Loss: 0.3187, Val Loss: 0.3206, LR: 0.000125
+Epoch 72/200, Train Loss: 0.3187, Val Loss: 0.3207, LR: 0.000125
+Epoch 73/200, Train Loss: 0.3187, Val Loss: 0.3206, LR: 0.000125
+Epoch 74/200, Train Loss: 0.3189, Val Loss: 0.3205, LR: 0.000125
+Epoch 75/200, Train Loss: 0.3187, Val Loss: 0.3207, LR: 0.000125
+Epoch 76/200, Train Loss: 0.3188, Val Loss: 0.3206, LR: 0.000125
+Epoch 77/200, Train Loss: 0.3186, Val Loss: 0.3204, LR: 0.000125
+Epoch 78/200, Train Loss: 0.3189, Val Loss: 0.3207, LR: 0.000125
+Epoch 79/200, Train Loss: 0.3186, Val Loss: 0.3205, LR: 0.000125
+Epoch 80/200, Train Loss: 0.3188, Val Loss: 0.3207, LR: 0.000125
+Epoch 81/200, Train Loss: 0.3185, Val Loss: 0.3204, LR: 0.000125
+Epoch 82/200, Train Loss: 0.3185, Val Loss: 0.3207, LR: 0.000125
+Epoch 83/200, Train Loss: 0.3186, Val Loss: 0.3205, LR: 0.000125
+Epoch 84/200, Train Loss: 0.3185, Val Loss: 0.3208, LR: 0.000125
+Epoch 85/200, Train Loss: 0.3185, Val Loss: 0.3209, LR: 0.000125
+Epoch 86/200, Train Loss: 0.3187, Val Loss: 0.3206, LR: 0.000125
+Epoch 87/200, Train Loss: 0.3185, Val Loss: 0.3209, LR: 0.000063
+Epoch 88/200, Train Loss: 0.3184, Val Loss: 0.3207, LR: 0.000063
+Epoch 89/200, Train Loss: 0.3185, Val Loss: 0.3206, LR: 0.000063
+Epoch 90/200, Train Loss: 0.3185, Val Loss: 0.3207, LR: 0.000063
+Epoch 91/200, Train Loss: 0.3183, Val Loss: 0.3208, LR: 0.000063
+Early stopping triggered
 ✅ Loaded best model from training
 
 📊 EVALUATING MODEL
 --------------------------------------------------
 
-🎯 PICK ACCURACY RESULTS - PHYSICS-INFORMED MODE
-============================================================
-Mean absolute error: 1.1630 ± 2.1258 seconds
-Median absolute error: 0.8450 seconds
-90th percentile error: 1.5520 seconds
-95th percentile error: 1.7785 seconds
+🎯 PICK ACCURACY RESULTS - PHYSICS-INFORMED MODE (MANUAL PICKS)
+======================================================================
+Mean absolute error: 1.0831 ± 2.0176 seconds
+Median absolute error: 0.7450 seconds
+90th percentile error: 1.0200 seconds
+95th percentile error: 1.6025 seconds
 
 📈 Performance Categories:
-  Excellent (< 0.5s):  58 (10.9%)
-  Good (0.5-1.0s):   294 (55.1%)
-  Fair (1.0-2.0s):   167 (31.3%)
-  Poor (> 2.0s):      15 (2.8%)
+  Excellent (< 0.5s):  33 (14.0%)
+  Good (0.5-1.0s):   177 (75.0%)
+  Fair (1.0-2.0s):    17 (7.2%)
+  Poor (> 2.0s):       9 (3.8%)
 
 📊 CREATING VISUALIZATIONS
 --------------------------------------------------
 
 🎛️ Final learned feature weights:
-  Raw            : 0.7259
-  STA/LTA 1      : 0.9016
-  Log STA/LTA 1  : 0.6581
-  STA/LTA 2      : 0.8695
-  Log STA/LTA 2  : 0.7172
-  STA/LTA 3      : 0.9571
-  Log STA/LTA 3  : 0.6493
-  Envelope       : 1.3037
-  Env. Deriv.    : 2.6227
-  Inst. Freq.    : 0.7810
-  Low Energy     : 0.7973
-  Low Env.       : 1.7805
-  Mid Energy     : 1.0639
-  Mid Env.       : 2.3977
-  High Energy    : 1.6434
-  High Env.      : 2.0951
-  Max Amplitude  : 1.8589
+  Raw            : 0.7534
+  STA/LTA 1      : 0.9374
+  Log STA/LTA 1  : 0.7403
+  STA/LTA 2      : 0.7994
+  Log STA/LTA 2  : 0.5595
+  STA/LTA 3      : 0.6265
+  Log STA/LTA 3  : 0.4484
+  Envelope       : 1.1225
+  Env. Deriv.    : 2.1780
+  Inst. Freq.    : 1.1890
+  Low Energy     : 0.9507
+  Low Env.       : 1.3527
+  Mid Energy     : 1.2317
+  Mid Env.       : 2.6393
+  High Energy    : 1.3237
+  High Env.      : 2.6821
+  Max Amplitude  : 1.2974
 
-💾 Model saved as 'physics_informed_phase_picker.pth'
+💾 Model saved as 'physics_informed_manual_phase_picker.pth'
 
-🎉 TRAINING COMPLETE - PHYSICS-INFORMED MODE!
+🎉 TRAINING COMPLETE - PHYSICS-INFORMED MODE (MANUAL PICKS)!
 ================================================================================

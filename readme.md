@@ -1,146 +1,158 @@
-# **Seismic Phase Picker ML Pipeline**
+# **Feature-Enhanced Neural Networks for Seismic Phase Detection**
 
-A comprehensive machine learning pipeline for automated P-wave detection in seismic data using physics-informed deep learning and adaptive U-Net architecture.
+This repository implements a complete workflow for **automated P-wave phase picking** using a **feature-augmented U-Net model**. The workflow demonstrates how adding **signal-derived features**—such as STA/LTA ratios, spectral envelopes, and amplitude volatility—can dramatically improve model accuracy, interpretability, and data efficiency, even with small training datasets.
 
-### **Overview**
+### 🧭 **Overview**
+The pipeline consists of three major stages:
+1. **Data Mining** (`data-mine.py`) — Automatically mines waveform data for earthquakes listed in a CSV catalog (e.g., USGS catalog export), processes traces from FDSN servers, and stores them in a structured SQLite database with PhaseNet-derived reference picks.
+2. **Manual Picking** (`picker.py`) — Interactive waveform inspection and manual correction of P-wave picks.
+3. **Model Training and Evaluation** (`ML-pipeline.py`) — Trains a 1D U-Net model on raw and signal-derived features and evaluates its performance on different dataset sizes.
+The workflow is modular: you can run each component independently or chain them for full reproducibility—from catalog data to a trained and evaluated model.
 
-This repository contains a complete end-to-end pipeline for detecting P-wave arrivals in seismic waveforms. The system combines traditional seismological feature extraction with modern deep learning techniques to achieve accurate and robust phase picking.
-
-##### **Key Features**
-
-- Dual-mode operation: Run with physics-informed features or raw waveforms only
-- Adaptive U-Net architecture with attention mechanisms for improved feature focus
-- Automated data mining from NCEDC public seismic data repository
-- Physics-informed feature extraction including STA/LTA ratios, frequency bands, and envelope analysis
-- SQLite database for efficient data storage and retrieval
-- Comprehensive visualization tools for features and predictions
-
-##### Requirements
-
+### ⚙️ **Installation**
+Clone this repository and install dependencies:
 ```
-pip install torch numpy scipy matplotlib tqdm
-pip install obspy seisbench boto3 sqlite3
+pip install -r requirements.txt
 ```
 
-##### Quick Start
+### 🗂️ **Pipeline Workflow**
 
-1. **Data Collection**
+#### 1. ** Data Mining --** `data-mine.py`
+This script downloads, processes, and stores waveform data from FDSN servers for earthquakes listed in a CSV catalog—including those exported directly from the [USGS Earthquake Catalog](https://earthquake.usgs.gov/earthquakes/search/
 
-First, mine seismic data from the NCEDC repository:
+**Inputs**
+- A CSV catalog file downloaded from USGS (or any similar source) containing:
+### **Inputs**
 
+| Column       | Description                                    |
+|:--------------|:-----------------------------------------------|
+| `time`        | Origin time of the earthquake in UTC           |
+| `latitude`    | Event latitude in decimal degrees              |
+| `longitude`   | Event longitude in decimal degrees             |
+| `depth`       | Hypocentral depth in kilometers                |
+| `mag`         | Magnitude of the event                         |
+| `place`       | Event location or region description           |
+| `id`          | Unique event identifier (optional)             |
+
+**Example input file:** `query.csv` — a CSV file exported directly from the [USGS Earthquake Catalog](https://earthquake.usgs.gov/earthquakes/search/).
+
+Example filename: `query.csv`
+
+**Process**
+1. Creates a **SQLite database** (`seismic_data.db`) with tables for earthquake metadata and waveform records.
+2. Reads the catalog and queries multiple FDSN data centers (`IRIS`, `NCEDC`, `SCEDC`) for waveform availability within a user-defined radius.
+3. Downloads traces for selected channels (e.g., `HNE`, `HNN`, `HNZ`) and automatically removes instrument response using available station metadata.
+4. Applies **PhaseNet** (via `seisbench`) to estimate initial P-picks for reference.
+5. Stores waveform data, pick times, and metadata (network, station, channel, sampling rate, etc.) in the database.
+
+**Configurable Parameters**
+Set these directly in the script or as command-line arguments:
 ```
-python data_mine.py
+csv_path='query.csv'
+db_path='seismic_data.db'
+radius_km=250
+channels=['HNE', 'HNN', 'HNZ']
+pre_time=3
+post_time=120
 ```
 
-This will:
-
-- Connect to the NCEDC public S3 bucket
-- Download waveforms for predefined earthquakes
-- Process and store data in SQLite database (`seismic_data_2.db`)
-- Apply PhaseNet for the initial P-wave pick reference
-
-1. **Model Training**
-
-Train the phase picker model:
-
+**Outputs**
+- **SQLite database** containing:
+	- `earthquake` table -- event time, location, magnitude, and ID
+	- `waveforms` table -- waveform data (as serialized arrays), sampling rate, PhaseNet picks, and event-station metadata
+Example Output:
 ```
-python ML-pipeline.py
-```
-Configure training mode by editing the configuration section in ML-pipeline.py:
-```
-# Toggle physics-informed features ON/OFF
-USE_PHYSICS_FEATURES = True   # Set to False for raw waveform only
-
-# Toggle max amplitude feature ON/OFF  
-USE_MAX_AMPLITUDE = False
-
-# Set number of training epochs
-TRAINING_EPOCHS = 200
+seismic_data.db
+├── earthquakes (event metadata)
+└── waveforms (serialized traces, picks, and attributes)
 ```
 
-##### Architecture
+#### 2. **Manual Picking --** `picker.py`
+A lightweight, interactive waveform visualization tool for verifying and correcting P-wave picks.
 
-**Data Mining (`data_mine.py`)**
-- Accesses NCEDC public seismic data via AWS S3
-- Processes earthquakes from California and Nevada
-- Applies instrument response removal
-- Stores processed waveforms in SQLite database
+**Inputs**
+- `seismic_data.db` (from `data-mine.py`)
 
-**ML Pipeline (`ML-pipeline.py`)**
-The pipeline implements:
+**Features**
+- Visualize waveforms and existing picks (manual or PhaseNet).
+- Add, move, or confirm picks using mouse/keyboard.
+- Directly writes updated pick times to the database (`manual_p_pick_time` field).
 
-1. Physics-Informed Features:
+**Controls**
+
+| Action               | Key / Mouse       | Description                              |
+|:---------------------|:------------------|:-----------------------------------------|
+| Place manual pick    | Mouse click       | Marks a P-wave arrival on the waveform   |
+| Accept existing pick | `a`               | Confirms the PhaseNet or auto pick       |
+| Skip trace           | `s`               | Skips the current waveform               |
+| Navigate next / prev | `→` / `←`         | Move to next or previous waveform        |
+| Save and quit        | `q`               | Saves all picks and closes the program   |
+
+#### 3. **Model Training and Evaluation--** `ML-pipeline.py`
+Trains a **feature-enhanced U-Net model** that combines the raw waveform with engineered signal-derived features.
+
+**Inputs**
+- `seismic_data.db` from previous steps
+- Configurable parameters (inside the script):
+```
+use_signal_features = True
+epochs = 100
+batch_size = 8
+learning_rate = 1e-4
+channels = ['HNE', 'HNN', 'HNZ']
+```
+
+**Feature Set**
+
+Each trace is augmented with:
 
 - Multi-scale STA/LTA ratios
-- Frequency band decomposition (1-5 Hz, 5-15 Hz, 15-45 Hz)
-- Envelope and instantaneous phase analysis
-- Max amplitude features with configurable windows
+- Hilbert envelope and derivative
+- Instantaneous frequency
+- Bandpass energy/envelope (low, mid, high frequency)
+- Maximum amplitude volatility
 
+**Model Architecture**
 
-2. Adaptive U-Net Model:
+- U-Net encoder–decoder with skip connections and attention blocks
+- Learnable feature weights to dynamically scale feature importance
+- Cross-entropy loss with class weighting
+- Early stopping and learning-rate scheduling
 
-- Encoder-decoder architecture with skip connections
-- Attention blocks for feature refinement
-- Batch normalization and dropout for regularization
-- Learnable feature weighting for physics-informed mode
+**Outputs**
+- best_adaptive_model.pth: trained model weights
+- performance_plots: training loss and error distributions
+- predictions: waveform overlays with true and predicted picks
+- feature_weights: bar charts showing learned feature importance
 
+### 🧩 **Customization**
 
-3. Training Features:
-
-- Early stopping with patience
-- Learning rate scheduling
-- Class-weighted loss function
-- Gradient clipping for stability
-
-##### Database Schema
-The SQLite database contains two tables:
-
-- earthquakes: Event metadata (time, location, magnitude, depth)
-- waveforms: Seismic traces with pick times and station information
-
-##### Performance Metrics
-The model evaluates pick accuracy using:
-
-- Mean/median absolute error in seconds
-- Performance categories (Excellent: <0.5s, Good: 0.5-1s, Fair: 1-2s, Poor: >2s)
-- Distribution analysis and visualization
-
-##### Output Files
-After training, the pipeline generates:
-
-- `best_adaptive_model.pth`: Best model checkpoint
-- `features`: Visualizations of extracted features
-- `predictions`: Model prediction plots with ground truth comparison
-- Training loss curves and error distribution plots
-
-##### Customization
-Adding New Earthquakes
-Edit the earthquakes list in `data_mine.py`:
-
+- Change radius or channels directly in data-mine.py:
 ```
-earthquakes = [
-    {
-        "time": 'YYYY-MM-DD HH:MM:SS',
-        "lat": latitude,
-        "lon": longitude, 
-        "mag": magnitude,
-        "depth": depth_km,
-        "radius": search_radius_km,
-        "name": "Event Name"
-    }
-]
+radius_km = 200
+channels = ['HNZ']
+```
+- Add new catalog events:
+Use any CSV downloaded from the USGS Earthquake Catalog with matching columns.
+
+- Adjust network depth in ML-pipeline.py:
+```
+features = [32, 64, 128, 256]
 ```
 
-##### Modifying Network Architecture
-Adjust the U-Net depth and feature channels in `ML-pipeline.py`:
+### 🚀 **Usage Example**
+
 ```
-model = AdaptiveUNet1D(
-    in_channels=n_input_channels,
-    out_channels=2,
-    features=[32, 64, 128, 256],  # Modify encoder/decoder depths
-    dropout=0.1
-)
+# Step 1: Download USGS catalog (query.csv) and mine data
+python data-mine.py
+
+# Step 2: Optionally verify picks manually
+python picker.py
+
+# Step 3: Train and evaluate the model
+python ML-pipeline.py
 ```
 
+💡 Future Extensions
 
-
+Although this study uses a simple U-Net to isolate the impact of signal-derived features, the same workflow can be extended using advanced models such as Transformer-based hybrid architectures to further improve performance, context sensitivity, and phase-picking accuracy.

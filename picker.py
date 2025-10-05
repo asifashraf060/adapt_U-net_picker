@@ -202,7 +202,7 @@ class ManualPicker:
         self.ax.grid(True, alpha=0.3)
         
         # Set initial x-limits (can be zoomed/panned by user)
-        self.ax.set_xlim([-wf['pre_time'], min(30, wf['post_time'])])
+        self.ax.set_xlim([-wf['pre_time'], min(60, wf['post_time'])])
         self.ax.set_ylim([-1.1, 1.1])
         
         # Reset pick line reference
@@ -283,6 +283,46 @@ class ManualPicker:
         print(f"  ✗ Skipped {self.current_waveform['network']}.{self.current_waveform['station_code']} (bad/unclear waveform)")
         self.manual_pick = None
         self.next_waveform()
+
+    def accept_phasenet_pick(self, event=None):
+        """Accept the PhaseNet pick as the manual pick"""
+        if self.current_waveform is None:
+            return
+
+        wf = self.current_waveform
+        if wf['p_pick_time'] is None:
+            print("  ⚠ No PhaseNet pick available for this waveform")
+            return
+
+        # Remove previous pick line if exists
+        if self.pick_line is not None:
+            self.pick_line.remove()
+
+        # Set the manual pick to the PhaseNet pick time
+        self.manual_pick = wf['p_pick_time']
+        phasenet_time_rel = wf['p_pick_time'] - wf['eq_time']
+
+        # Draw the pick line (green for accepted PhaseNet pick)
+        self.pick_line = self.ax.axvline(phasenet_time_rel, color='green',
+                                        linewidth=2, alpha=0.8,
+                                        label=f'Accepted: {phasenet_time_rel:.2f}s')
+
+        # Update legend
+        handles, labels = self.ax.get_legend_handles_labels()
+        # Remove old "New pick" or "Accepted" entry if exists
+        filtered_handles = []
+        filtered_labels = []
+        for h, l in zip(handles, labels):
+            if not l.startswith('New pick') and not l.startswith('Accepted'):
+                filtered_handles.append(h)
+                filtered_labels.append(l)
+        filtered_handles.append(self.pick_line)
+        filtered_labels.append(f'Accepted: {phasenet_time_rel:.2f}s')
+        self.ax.legend(filtered_handles, filtered_labels, loc='upper right', fontsize=9)
+
+        plt.draw()
+
+        print(f"  ✓ Accepted PhaseNet pick at {phasenet_time_rel:.2f}s relative to origin")
     
     def save_and_quit(self, event=None):
         """Save current pick and quit"""
@@ -323,18 +363,21 @@ class ManualPicker:
         button_width = 0.08
         button_height = 0.04
         button_y = 0.05
-        
-        ax_prev = plt.axes([0.35, button_y, button_width, button_height])
-        ax_skip = plt.axes([0.44, button_y, button_width, button_height])
-        ax_next = plt.axes([0.53, button_y, button_width, button_height])
-        ax_quit = plt.axes([0.62, button_y, button_width, button_height])
-        
+
+        ax_prev = plt.axes([0.25, button_y, button_width, button_height])
+        ax_accept = plt.axes([0.34, button_y, button_width, button_height])
+        ax_skip = plt.axes([0.43, button_y, button_width, button_height])
+        ax_next = plt.axes([0.52, button_y, button_width, button_height])
+        ax_quit = plt.axes([0.61, button_y, button_width, button_height])
+
         btn_prev = Button(ax_prev, '← Previous', color='lightblue')
+        btn_accept = Button(ax_accept, 'Accept PN', color='lightcyan')
         btn_skip = Button(ax_skip, 'Skip (Bad)', color='lightyellow')
         btn_next = Button(ax_next, 'Next →', color='lightgreen')
         btn_quit = Button(ax_quit, 'Save & Quit', color='lightcoral')
-        
+
         btn_prev.on_clicked(self.previous_waveform)
+        btn_accept.on_clicked(self.accept_phasenet_pick)
         btn_skip.on_clicked(self.skip_waveform)
         btn_next.on_clicked(self.next_waveform)
         btn_quit.on_clicked(self.save_and_quit)
@@ -350,6 +393,8 @@ class ManualPicker:
                 self.previous_waveform()
             elif event.key == 's':
                 self.skip_waveform()
+            elif event.key == 'a':
+                self.accept_phasenet_pick()
             elif event.key == 'q':
                 self.save_and_quit()
             elif event.key == 'r':
@@ -368,6 +413,7 @@ class ManualPicker:
         print("\nInstructions:")
         print("  • Use ZOOM/PAN tools in the toolbar to examine waveform")
         print("  • LEFT CLICK on the plot to pick P-arrival (when not in zoom/pan mode)")
+        print("  • Press 'a' to accept PhaseNet pick as manual pick")
         print("  • Press 'n' or RIGHT ARROW to save pick and move to next")
         print("  • Press 'p' or LEFT ARROW to go back")
         print("  • Press 's' to skip bad/unclear waveforms")

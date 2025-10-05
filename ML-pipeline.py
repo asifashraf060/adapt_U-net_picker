@@ -1281,24 +1281,24 @@ if __name__ == "__main__":
     # ═══════════════════════════════════════════════════════════════════════════════════════
     
     # Toggle physics-informed features ON/OFF
-    USE_PHYSICS_FEATURES = True   # Set to False for raw waveform only
+    USE_PHYSICS_FEATURES = False   # Set to False for raw waveform only
 
     # Toggle max amplitude feature ON/OFF
-    USE_MAX_AMPLITUDE = True  # Set to False to disable max amplitude feature
-    window_length = np.array([100])  # Window lengths for max amplitude feature
+    USE_MAX_AMPLITUDE = False  # Set to False to disable max amplitude feature
+    window_length = np.array([100, 200, 500])  # Window lengths for max amplitude feature
 
     # Set number of training epochs
-    TRAINING_EPOCHS = 100
+    TRAINING_EPOCHS = 200
     
     # Database path
-    DATABASE_PATH = 'seismic_data_new.db'
+    DATABASE_PATH = 'seismic_data_s3_2.db'
     
     # Batch size
     BATCH_SIZE = 4
 
     # Pick type (optional - will prompt user if not specified)
     # PICK_TYPE = 'phasenet'  # or 'manual' - leave as None for interactive choice
-    PICK_TYPE = None
+    PICK_TYPE = 'manual'  # or 'phasenet' - leave as None for interactive choice
 
     # Run the main function with your configuration
     main(

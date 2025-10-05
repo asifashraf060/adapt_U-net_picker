@@ -1,6 +1,7 @@
 import sqlite3
 import pickle
 import numpy as np
+import pandas as pd
 from obspy import UTCDateTime, read
 from obspy.clients.fdsn.client import Client
 from obspy.core.inventory.inventory import Inventory
@@ -28,38 +29,6 @@ picker = sbm.PhaseNet.from_pretrained("original")
 # 🏗️ UTILITY FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
-def station_data_exists(station, eq_time, pre_time, post_time, client: Client, 
-                       network: str, location: str, channel: str,
-                       s3_client, bucket_name: str) -> bool:
-    """Check if station data exists in S3"""
-    day0 = eq_time.replace(hour=0, minute=0, second=0, microsecond=0)
-    jul = day0.julday
-    fname = f"{station.code}.{network}.{channel}..D.{day0.year}.{jul:03d}"
-    key = f"continuous_waveforms/{network}/{day0.year}/{day0.year}.{jul:03d}/{fname}"
-    
-    try:
-        s3_client.head_object(Bucket=bucket_name, Key=key)
-        return True
-    except ClientError:
-        return False
-
-def filter_inventory(inventory: Inventory, eq_time, pre_time, post_time, 
-                    client: Client, network: str, location: str, channel: str,
-                    s3_client, bucket_name: str) -> Inventory:
-    """Filter inventory to only include stations with available data"""
-    kept_networks = []
-    for net in inventory.networks:
-        kept_stns = []
-        for st in net.stations:
-            if station_data_exists(st, eq_time, pre_time, post_time, client, 
-                                 network, location, channel, s3_client, bucket_name):
-                kept_stns.append(st)
-        if kept_stns:
-            net.stations = kept_stns
-            kept_networks.append(net)
-    
-    inventory.networks = kept_networks
-    return inventory
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # 🏗️ DATABASE CREATION
@@ -78,7 +47,9 @@ def create_database(db_path='seismic_data_2.db'):
             latitude REAL,
             longitude REAL,
             magnitude REAL,
-            depth REAL
+            depth REAL,
+            place TEXT,
+            event_id TEXT
         )
     ''')
     
@@ -169,7 +140,7 @@ def process_station(station, start_time, pre_time, post_time, eq_time,
         }
         
     except Exception as e:
-        print(f"  Error processing station {station_code}: {e}")
+        #print(f"  Error processing station {station_code}: {e}")
         return None
 
 def mine_earthquake_data(eq_time, eq_lat, eq_lon, eq_mag=None, eq_depth=None,
@@ -184,23 +155,35 @@ def mine_earthquake_data(eq_time, eq_lat, eq_lon, eq_mag=None, eq_depth=None,
     start_time = eq_time.replace(hour=0, minute=0, second=0, microsecond=0)
     end_time = eq_time.replace(hour=23, minute=59, second=59, microsecond=999999)
     
-    # Get station inventory
-    client = Client('NCEDC')
+    # Get station inventory - try multiple FDSN clients
     print(f"\nProcessing earthquake at {eq_time}")
     print("Getting station inventory...")
+
+    inventory = None
+    fdsn_clients = ['IRIS', 'NCEDC', 'SCEDC']
+
+    for client_name in fdsn_clients:
+        try:
+            print(f"  Trying {client_name} FDSN service...")
+            client = Client(client_name)
+            inventory = client.get_stations(
+                network=network, latitude=eq_lat, longitude=eq_lon,
+                starttime=start_time, endtime=end_time, maxradius=radius_km/111.2,
+                location='*', channel=channel, level="response"
+            )
+            print(f"  ✓ Successfully got inventory from {client_name}")
+            break
+        except Exception as e:
+            print(f"  ✗ {client_name} failed: {e}")
+            continue
+
+    if not inventory:
+        print("  ❌ All FDSN services failed - skipping this earthquake")
+        return []
     
-    inventory = client.get_stations(
-        network=network, latitude=eq_lat, longitude=eq_lon,
-        starttime=start_time, endtime=end_time, maxradius=radius_km/111.2,
-        location='*', channel=channel, level="response"
-    )
-    
-    print("Filtering inventory for available data...")
-    inventory = filter_inventory(inventory, eq_time, pre_time, post_time, 
-                               client, network, '*', channel, s3, BUCKET_NAME)
-    
+    # Get all stations from inventory (no pre-filtering for performance)
     stations = inventory[0].stations if inventory else []
-    print(f"Found {len(stations)} stations with data")
+    print(f"Found {len(stations)} stations in inventory")
     
     # Process each station
     waveforms = []
@@ -228,262 +211,148 @@ def mine_earthquake_data(eq_time, eq_lat, eq_lon, eq_mag=None, eq_depth=None,
 # 🏗️ MAIN DATA MINING FUNCTION
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
-def main():
-    """Main data mining function"""
-    
+def main(csv_path='query.csv',
+         db_path='seismic_data.db',
+         radius_km=300,
+         network='NC',
+         channel='HNE',
+         pre_time=3,
+         post_time=120):
+    """
+    Main data mining function
+
+    Parameters:
+    -----------
+    csv_path : str
+        Path to earthquake catalog CSV file
+    db_path : str
+        Path to output SQLite database
+    radius_km : float
+        Search radius in kilometers for stations (applied to all earthquakes)
+    network : str
+        Network code to use
+    channel : str
+        Channel code to use
+    pre_time : float
+        Seconds before earthquake to include
+    post_time : float
+        Seconds after earthquake to include
+    """
+
     print("="*80)
     print("SEISMIC DATA MINING FOR ML PIPELINE")
     print("="*80)
-    
+
     # Create database
-    db_path = 'seismic_data_2.db'
     print(f"\nCreating database: {db_path}")
     conn = create_database(db_path)
     cursor = conn.cursor()
-    
-    # Define earthquakes to process
-    earthquakes = [
-        {
-            "time": '2022-12-20T10:34:24', 
-            "lat": 40.369, 
-            "lon": -124.588, 
-            "mag": 6.4,
-            "depth": 10.0,
-            "radius": 300,
-            "name": "Ferndale"
-        },
-        {
-            "time": "2010-01-10T00:27:39", 
-            "lat": 40.652, 
-            "lon": -124.693, 
-            "mag": 6.5,
-            "depth": 15.0,
-            "radius": 300,
-            "name": "Eureka"
-        },
-        {
-            "time": "2021-12-20T20:10:31", 
-            "lat": 40.390, 
-            "lon": -124.298, 
-            "mag": 5.8,
-            "depth": 12.0,
-            "radius": 300,
-            "name": "Petrolia"
-        },
-        {
-            "time": "2021-07-08T22:49:48", 
-            "lat": 38.508, 
-            "lon": -119.500, 
-            "mag": 6.0,
-            "depth": 8.0,
-            "radius": 300,
-            "name": "Antelope"
-        },
-        {
-            "time": "2020-04-11T14:36:37", 
-            "lat": 38.053, 
-            "lon": -118.733, 
-            "mag": 5.5,
-            "depth": 10.0,
-            "radius": 300,
-            "name": "Bodie"
-        },
-        {
-            "time": "2020-09-19T06:38:46", 
-            "lat": 34.038, 
-            "lon": -118.080, 
-            "mag": 4.5,
-            "depth": 17.0,
-            "radius": 300,
-            "name": "South El Monte"
-        },
-        {
-            "time": "2023-05-11T23:19:41", 
-            "lat": 40.204, 
-            "lon": -121.110, 
-            "mag": 5.5,
-            "depth": 5.9,
-            "radius": 300,
-            "name": "Lake Almanor"
-        },
-        {
-            "time": "2024-08-07T04:09:56", 
-            "lat": 35.109, 
-            "lon": -119.097, 
-            "mag": 5.2,
-            "depth": 11.6,
-            "radius": 300,
-            "name": "Lamont"
-        },
-        {
-            "time": "2024-12-05T18:44:21", 
-            "lat": 40.374, 
-            "lon": -125.022, 
-            "mag": 7,
-            "depth": 10,
-            "radius": 300,
-            "name": "Cape Mendocino"
-        },
-        {
-            "time": "2020-06-24T17:40:49", 
-            "lat": 36.447, 
-            "lon": -117.975, 
-            "mag": 5.8,
-            "depth": 4.7,
-            "radius": 300,
-            "name": "Long Pine"
-        },
-        {
-            "time": "2020-05-15T11:03:27", 
-            "lat": 38.169, 
-            "lon": -117.850, 
-            "mag": 6.5,
-            "depth": 2.7,
-            "radius": 300,
-            "name": "Monte Cristo Range"
-        },
-        {
-            "time": "2020-06-04T01:32:11", 
-            "lat": 35.615, 
-            "lon": -117.428, 
-            "mag": 5.5,
-            "depth": 8.4,
-            "radius": 300,
-            "name": "Searles Valley"
-        },
-        {
-            "time": "2025-01-02T02:34:04", 
-            "lat": 38.846, 
-            "lon": -122.756, 
-            "mag": 4.7,
-            "depth": 1.4,
-            "radius": 300,
-            "name": "Cobb"
-        },
-        {
-            "time": "2024-12-15T07:21:59", 
-            "lat": 40.414, 
-            "lon": -125.184, 
-            "mag": 5.3,
-            "depth": 10.0,
-            "radius": 300,
-            "name": "Petrolia"
-        },
-        {
-            "time": "2024-12-09T23:08:31", 
-            "lat": 39.168, 
-            "lon": -119.024, 
-            "mag": 5.7,
-            "depth": 9.3,
-            "radius": 300,
-            "name": "Parker Butte"
-        },
-        {
-            "time": "2023-01-01T18:35:04", 
-            "lat": 40.409, 
-            "lon": -123.971, 
-            "mag": 5.4,
-            "depth": 30.6,
-            "radius": 300,
-            "name": "Rio Dell"
-        },
-        {
-            "time": "2021-12-20T20:10:31", 
-            "lat": 40.390, 
-            "lon": -124.298, 
-            "mag": 6.2,
-            "depth": 27.0,
-            "radius": 300,
-            "name": "Petrolia"
-        },
-        
-    ]
-    
+
+    # Load earthquakes from CSV
+    print(f"Loading earthquakes from {csv_path}")
+    eq_df = pd.read_csv(csv_path)
+    print(f"Found {len(eq_df)} earthquakes in catalog")
+
     # Process each earthquake
     total_waveforms = 0
-    
-    for eq in earthquakes:
+
+    for idx, eq in eq_df.iterrows():
         print(f"\n{'='*60}")
-        print(f"Processing {eq['name']} earthquake")
-        print(f"{'='*60}")
-        
+        print(f"Processing earthquake {idx+1}/{len(eq_df)}")
+        print(f"Location: {eq.get('place', 'Unknown')}")
+        print(f"Time: {eq['time']}")
+        print(f"Magnitude: {eq.get('mag', 'Unknown')}")
+        print(f"{'-'*20}")
+
         try:
-            # Insert earthquake record
-            eq_time = UTCDateTime(eq['time'])
-            cursor.execute('''
-                INSERT INTO earthquakes (event_time, latitude, longitude, magnitude, depth)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (eq_time.timestamp, eq['lat'], eq['lon'], eq.get('mag'), eq.get('depth')))
-            
-            earthquake_id = cursor.lastrowid
-            
             # Mine waveform data
             waveforms = mine_earthquake_data(
                 eq_time=eq['time'],
-                eq_lat=eq['lat'],
-                eq_lon=eq['lon'],
+                eq_lat=eq['latitude'],
+                eq_lon=eq['longitude'],
                 eq_mag=eq.get('mag'),
                 eq_depth=eq.get('depth'),
-                radius_km=eq['radius'],
-                network='NC',
-                channel='HNE',
-                pre_time=3,
-                post_time=120
+                radius_km=radius_km,
+                network=network,
+                channel=channel,
+                pre_time=pre_time,
+                post_time=post_time
             )
-            
-            # Insert waveforms into database
-            for wf in waveforms:
-                # Serialize waveform data
-                waveform_blob = pickle.dumps(wf['waveform'])
-                
+
+            # Insert earthquake record if we have waveforms
+            if waveforms:
+                eq_time = UTCDateTime(eq['time'])
                 cursor.execute('''
-                    INSERT INTO waveforms (
-                        earthquake_id, station_code, network, channel, location,
-                        waveform_data, sampling_rate, p_pick_time, eq_time,
-                        pre_time, post_time, distance_km
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    earthquake_id,
-                    wf['station_code'],
-                    wf['network'],
-                    wf['channel'],
-                    wf['location'],
-                    waveform_blob,
-                    wf['sampling_rate'],
-                    wf['p_pick_time'],
-                    wf['eq_time'],
-                    wf['pre_time'],
-                    wf['post_time'],
-                    wf['distance_km']
-                ))
-            
-            conn.commit()
-            total_waveforms += len(waveforms)
-            print(f"✅ Added {len(waveforms)} waveforms to database")
-            
+                    INSERT INTO earthquakes (event_time, latitude, longitude, magnitude, depth, place, event_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (eq_time.timestamp, eq['latitude'], eq['longitude'],
+                      eq.get('mag'), eq.get('depth'), eq.get('place', ''), eq.get('id', '')))
+
+                earthquake_id = cursor.lastrowid
+
+                # Insert waveforms into database
+                for wf in waveforms:
+                    # Serialize waveform data
+                    waveform_blob = pickle.dumps(wf['waveform'])
+
+                    cursor.execute('''
+                        INSERT INTO waveforms (
+                            earthquake_id, station_code, network, channel, location,
+                            waveform_data, sampling_rate, p_pick_time, eq_time,
+                            pre_time, post_time, distance_km
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (
+                        earthquake_id,
+                        wf['station_code'],
+                        wf['network'],
+                        wf['channel'],
+                        wf['location'],
+                        waveform_blob,
+                        wf['sampling_rate'],
+                        wf['p_pick_time'],
+                        wf['eq_time'],
+                        wf['pre_time'],
+                        wf['post_time'],
+                        wf['distance_km']
+                    ))
+
+                conn.commit()
+                total_waveforms += len(waveforms)
+                print(f"✅ Added {len(waveforms)} waveforms to database")
+            else:
+                print(f"❌ No waveforms found for this earthquake")
+
         except Exception as e:
-            print(f"❌ Error processing {eq['name']} earthquake: {e}")
+            print(f"❌ Error processing earthquake: {e}")
             conn.rollback()
-    
+
     # Print summary
     print(f"\n{'='*60}")
     print(f"DATA MINING COMPLETE")
     print(f"{'='*60}")
-    print(f"Total earthquakes processed: {len(earthquakes)}")
+    print(f"Total earthquakes processed: {len(eq_df)}")
     print(f"Total waveforms in database: {total_waveforms}")
-    
+
     # Verify database contents
     cursor.execute("SELECT COUNT(*) FROM earthquakes")
     eq_count = cursor.fetchone()[0]
     cursor.execute("SELECT COUNT(*) FROM waveforms")
     wf_count = cursor.fetchone()[0]
-    
+
     print(f"\nDatabase verification:")
     print(f"  Earthquakes: {eq_count}")
     print(f"  Waveforms: {wf_count}")
-    
+
     conn.close()
     print(f"\n✅ Database saved to: {db_path}")
 
 if __name__ == "__main__":
-    main()
+    main(
+        csv_path='query.csv',
+        db_path='seismic_data_s3_2.db',
+        radius_km=50,  # Search radius for stations
+        network='NC',   # Network code
+        channel='HNZ',  # Channel code
+        pre_time=3,     # Seconds before earthquake
+        post_time=120   # Seconds after earthquake
+    )

@@ -23,77 +23,12 @@ warnings.filterwarnings('ignore', category=UserWarning)
 picker = sbm.PhaseNet.from_pretrained("original")
 
 # FDSN Network clients to try (in order of preference)
-FDSN_CLIENTS = ['NCEDC', 'SCEDC', 'IRIS']
+FDSN_CLIENTS = ['IRIS', 'NCEDC', 'SCEDC']
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # 🏗️ UTILITY FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════════════
 
-def station_data_exists(station, eq_time, pre_time, post_time,
-                       network: str, location: str, channel: str) -> bool:
-    """
-    Check if station data exists using FDSN availability service
-    This avoids downloading actual waveform data just to check availability
-    Falls back to minimal waveform request if availability service fails
-    """
-    start = eq_time - pre_time
-    end = eq_time + post_time
-
-    # Try each FDSN client until one has availability data
-    for client_name in FDSN_CLIENTS:
-        try:
-            client = Client(client_name)
-            # First try availability service (most efficient)
-            try:
-                availability = client.get_availability(
-                    network=network,
-                    station=station.code,
-                    location=location,
-                    channel=channel,
-                    starttime=start,
-                    endtime=end
-                )
-                # If we get any availability records, data exists
-                if availability and len(availability) > 0:
-                    return True
-            except:
-                # Availability service failed, fallback to minimal waveform check
-                # Use a very short time window to minimize download
-                short_start = eq_time - 1  # Just 1 second before earthquake
-                short_end = eq_time + 1    # Just 1 second after earthquake
-
-                st_temp = client.get_waveforms(
-                    network=network,
-                    station=station.code,
-                    location=location,
-                    channel=channel,
-                    starttime=short_start,
-                    endtime=short_end
-                )
-                if len(st_temp) > 0:
-                    return True
-        except:
-            # This client doesn't have the data, try next one
-            continue
-
-    return False
-
-def filter_inventory(inventory: Inventory, eq_time, pre_time, post_time, 
-                    network: str, location: str, channel: str) -> Inventory:
-    """Filter inventory to only include stations with available data"""
-    kept_networks = []
-    for net in inventory.networks:
-        kept_stns = []
-        for st in net.stations:
-            if station_data_exists(st, eq_time, pre_time, post_time, 
-                                 network, location, channel):
-                kept_stns.append(st)
-        if kept_stns:
-            net.stations = kept_stns
-            kept_networks.append(net)
-    
-    inventory.networks = kept_networks
-    return inventory
 
 # ═══════════════════════════════════════════════════════════════════════════════════════
 # 🏗️ DATABASE CREATION
@@ -253,8 +188,7 @@ def mine_earthquake_data(eq_time, eq_lat, eq_lon, eq_mag=None, eq_depth=None,
     end_time = eq_time.replace(hour=23, minute=59, second=59, microsecond=999999)
     
     # Get station inventory - try each FDSN client
-    print(f"\nProcessing earthquake at {eq_time}")
-    print("Getting station inventory...")
+    print("     Getting station inventory...")
     
     # Convert lists to comma-separated strings for inventory query
     network_str = ','.join(networks)
@@ -264,31 +198,28 @@ def mine_earthquake_data(eq_time, eq_lat, eq_lon, eq_mag=None, eq_depth=None,
     for client_name in FDSN_CLIENTS:
         try:
             client = Client(client_name)
-            temp_inv = client.get_stations(
-                network=network_str, 
-                latitude=eq_lat, 
+            inventory = client.get_stations(
+                network=network_str,
+                latitude=eq_lat,
                 longitude=eq_lon,
-                starttime=start_time, 
-                endtime=end_time, 
+                starttime=start_time,
+                endtime=end_time,
                 maxradius=radius_km/111.2,
-                location='*', 
-                channel=channel_str, 
+                location='*',
+                channel=channel_str,
                 level="response"
             )
-            if temp_inv:
-                if inventory is None:
-                    inventory = temp_inv
-                else:
-                    # Combine inventories from different sources
-                    inventory += temp_inv
+            if inventory:
+                # Successfully got inventory, stop trying other clients
+                break
         except:
             continue
     
     if not inventory:
-        print("No inventory found for this earthquake")
+        print("     No inventory found for this earthquake")
         return []
     
-    print("Processing all networks and channels...")
+    print("     Processing all networks and channels...")
     
     # Process each network and channel combination
     all_waveforms = []
@@ -298,30 +229,27 @@ def mine_earthquake_data(eq_time, eq_lat, eq_lon, eq_mag=None, eq_depth=None,
         for channel in channels:
             # Filter inventory for this specific network/channel
             filtered_inv = inventory.select(network=network, channel=channel)
-            
+
             if not filtered_inv:
                 continue
-                
-            # Further filter for available data
-            filtered_inv = filter_inventory(filtered_inv, eq_time, pre_time, post_time, 
-                                          network, '*', channel)
-            
+
+            # Get all stations from filtered inventory (no availability filtering)
             stations = []
             for net in filtered_inv.networks:
                 stations.extend(net.stations)
-            
+
             if not stations:
                 continue
-                
+
             total_stations += len(stations)
-            
-            # Process each station
-            for station in stations:
-                result = process_station(station, start_time, pre_time, post_time, 
+
+            # Process each station directly (no pre-checking)
+            for station in tqdm(stations, desc=f"Processing {network}.{channel} stations", leave=False):
+                result = process_station(station, start_time, pre_time, post_time,
                                        eq_time, network, channel, inventory)
                 if result:
                     # Calculate distance from earthquake
-                    dist_deg = np.sqrt((station.latitude - eq_lat)**2 + 
+                    dist_deg = np.sqrt((station.latitude - eq_lat)**2 +
                                       (station.longitude - eq_lon)**2)
                     result['distance_km'] = dist_deg * 111.2
                     result['network'] = network
@@ -334,7 +262,7 @@ def mine_earthquake_data(eq_time, eq_lat, eq_lon, eq_mag=None, eq_depth=None,
                     all_waveforms.append(result)
     
     if total_stations > 0:
-        print(f"Found {total_stations} stations, successfully processed {len(all_waveforms)} waveforms")
+        print(f"        Found {total_stations} stations, successfully processed {len(all_waveforms)} waveforms")
     else:
         print("No stations found with available data")
     return all_waveforms
@@ -391,7 +319,7 @@ def main(csv_path='query.csv',
         print(f"Location: {eq.get('place', 'Unknown')}")
         print(f"Time: {eq['time']}")
         print(f"Magnitude: {eq.get('mag', 'Unknown')}")
-        print(f"{'='*60}")
+        print(f"{'-'*20}")
         
         try:
             # Mine waveform data for all channels (network wildcard)
@@ -477,9 +405,9 @@ def main(csv_path='query.csv',
 if __name__ == "__main__":
     main(
         csv_path='query.csv',
-        db_path='seismic_data_5.db',
-        radius_km=100,  # User-specific radius for all earthquakes
-        channels=['HHZ'],  # Configurable channels
+        db_path='seismic_data_101.db',
+        radius_km=200,  # User-specific radius for all earthquakes
+        channels=['HNZ'],  # Configurable channels
         pre_time=3,  # Fixed
         post_time=120  # Fixed
     )
